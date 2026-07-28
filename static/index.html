@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRRR Precipitation Verification</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d27;
+            --bg-card: #21252f;
+            --bg-hover: #2a2e3a;
+            --border: #2e3341;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0ac;
+            --text-dim: #636978;
+            --accent-blue: #4a9eff;
+            --accent-green: #34d399;
+            --accent-orange: #fb923c;
+            --accent-red: #f87171;
+            --accent-purple: #a78bfa;
+            --uhmt-color: #a78bfa;
+            --hrrr-color: #4a9eff;
+            --aorc-color: #34d399;
+            --gauge-color: #fb923c;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* === HEADER === */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .header .tag {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            background: rgba(74, 158, 255, 0.12);
+            padding: 3px 10px;
+            border-radius: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* === CONTROLS BAR === */
+        .controls {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 32px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .control-group input,
+        .control-group select {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            padding: 7px 12px;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .time-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+            background: var(--bg-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .time-display span { color: var(--text-secondary); }
+
+        .btn-run {
+            background: var(--accent-blue);
+            color: #fff;
+            border: none;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 8px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.3px;
+        }
+
+        .btn-run:hover { background: #3a8bef; transform: translateY(-1px); }
+        .btn-run:disabled { background: var(--bg-hover); color: var(--text-dim); cursor: not-allowed; transform: none; }
+
+        .status-text {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-style: italic;
+            min-width: 200px;
+        }
+
+        .status-text.running { color: var(--accent-orange); }
+        .status-text.done { color: var(--accent-green); }
+        .status-text.error { color: var(--accent-red); }
+
+        /* === MAIN LAYOUT === */
+        .main {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 0;
+            min-height: calc(100vh - 110px);
+        }
+
+        /* === SIDEBAR (metrics) === */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(100vh - 110px);
+        }
+
+        .metric-section {
+            margin-bottom: 20px;
+        }
+
+        .metric-section h3 {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 5px 0;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .metric-value.good { color: var(--accent-green); }
+        .metric-value.warn { color: var(--accent-orange); }
+        .metric-value.bad { color: var(--accent-red); }
+
+        .metric-big {
+            text-align: center;
+            padding: 14px 0;
+        }
+
+        .metric-big .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .metric-big .label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .gauge-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        .gauge-table th {
+            text-align: left;
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .gauge-table td {
+            padding: 4px 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(46, 51, 65, 0.5);
+        }
+
+        .gauge-table td:first-child {
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* === CONTENT (map + figures) === */
+        .content {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(100vh - 110px);
+        }
+
+        /* Map container */
+        .map-container {
+            width: 100%;
+            height: 420px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        #map { width: 100%; height: 100%; }
+
+        /* Dynamic colorbar */
+        .map-colorbar {
+            position: absolute;
+            bottom: 14px;
+            right: 14px;
+            z-index: 500;
+            background: rgba(15, 17, 23, 0.88);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px 4px;
+            min-width: 200px;
+            pointer-events: none;
+        }
+
+        .cbar-title {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .cbar-gradient {
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .cbar-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        /* Figure grid */
+        .figure-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .figure-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .figure-card:hover { border-color: var(--accent-blue); }
+
+        .figure-card h4 {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding: 10px 14px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .figure-card img {
+            width: 100%;
+            display: block;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .figure-card img:hover { opacity: 0.9; }
+
+        /* Wide figure cards (span full grid width) */
+        .figure-wide {
+            grid-column: 1 / -1;
+        }
+
+        /* Zoom/Pan overlay viewer */
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .overlay.active { display: flex; }
+
+        .overlay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+
+        .overlay-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 6px;
+        }
+
+        .zoom-controls button {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 16px;
+            width: 34px;
+            height: 34px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+
+        .zoom-controls button:hover { background: var(--bg-hover); border-color: var(--accent-blue); }
+
+        .overlay-img-wrap {
+            flex: 1;
+            overflow: hidden;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .overlay-img-wrap:active { cursor: grabbing; }
+
+        .overlay-img-wrap img {
+            max-width: 95vw;
+            max-height: 88vh;
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
+            user-select: none;
+        }
+
+        /* Empty / loading state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: var(--text-dim);
+            text-align: center;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            max-width: 340px;
+            line-height: 1.6;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Legend strip */
+        .legend {
+            display: flex;
+            gap: 20px;
+            padding: 10px 0;
+            margin-bottom: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* Map view buttons */
+        .map-view-btns {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .view-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            letter-spacing: 0.3px;
+        }
+
+        .view-btn:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+        .view-btn.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+
+        /* Time slider */
+        .time-slider-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
+
+        .slider-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .slider-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .slider-label strong {
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .slider-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .slider-btns {
+            display: flex;
+            gap: 4px;
+        }
+
+        .slider-btns button {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 10px;
+            width: 26px;
+            height: 26px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slider-btns button:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+
+        .hour-slider {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .hour-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            border: 2px solid #fff;
+        }
+
+        .slider-ticks {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 4px;
+            font-size: 9px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Gauge label markers */
+        .gauge-label-marker {
+            background: rgba(251, 146, 60, 0.9);
+            border: 2px solid #fff;
+            border-radius: 12px;
+            color: #fff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 5px;
+            text-align: center;
+            white-space: nowrap;
+            line-height: 1.2;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        }
+
+        .gauge-label-marker.uhmt {
+            background: rgba(167, 139, 250, 0.9);
+        }
+
+        .gauge-label-marker .stn-name {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 8px;
+            font-weight: 600;
+            opacity: 0.85;
+            display: block;
+        }
+
+        /* Layer toggle controls */
+        .layer-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .layer-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 4px;
+        }
+
+        .layer-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .layer-btn:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+        .layer-btn[data-active="true"] { 
+            background: rgba(74, 158, 255, 0.15); 
+            border-color: var(--accent-blue); 
+            color: var(--text-primary);
+        }
+
+        .layer-swatch {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }
+
+        .layer-separator {
+            color: var(--border);
+            font-size: 14px;
+            margin: 0 2px;
+        }
+
+        .opacity-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 4px;
+        }
+
+        .opacity-control input[type="range"] {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .opacity-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main { grid-template-columns: 1fr; }
+            .sidebar { max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+            .content { max-height: none; }
+        }
+        /* Tutorial modal */
+        .tutorial-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .tutorial-box { background: var(--bg-secondary); border-radius: 12px; max-width: 520px; width: 90%; padding: 28px; position: relative; }
+        .tutorial-box h2 { color: var(--text-primary); margin: 0 0 16px; font-size: 18px; }
+        .tutorial-box p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0 0 12px; }
+        .tutorial-box .step-num { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-blue); color: #fff; text-align: center; line-height: 22px; font-size: 12px; font-weight: 700; margin-right: 8px; }
+        .tutorial-dots { text-align: center; margin: 16px 0; }
+        .tutorial-dots span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bg-tertiary); margin: 0 4px; cursor: pointer; }
+        .tutorial-dots span.active { background: var(--accent-blue); }
+        .tutorial-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+        .tutorial-nav button { padding: 6px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .tutorial-nav .btn-skip { background: transparent; color: var(--text-dim); }
+        .tutorial-nav .btn-next { background: var(--accent-blue); color: #fff; }
+        .tutorial-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; }
+
+        /* Recent analyses */
+        .recent-panel { padding: 8px 12px; border-bottom: 1px solid var(--border-color); }
+        .recent-panel h4 { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 6px; }
+        .recent-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+        .recent-item:hover { background: var(--bg-tertiary); }
+        .recent-item .ri-date { font-weight: 600; color: var(--text-primary); }
+        .recent-item .ri-info { color: var(--text-dim); font-size: 11px; }
+
+        /* Detail toggle */
+        .detail-toggle { display: flex; gap: 2px; background: var(--bg-tertiary); border-radius: 6px; padding: 2px; margin: 8px 0; }
+        .detail-toggle button { flex: 1; padding: 4px 0; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; background: transparent; color: var(--text-dim); }
+        .detail-toggle button.active { background: var(--accent-blue); color: #fff; }
+        .detail-section { display: block; }
+        .detail-section.hidden { display: none; }
+
+        /* Loading phases */
+        .loading-phases { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+        .loading-phase { display: inline-block; margin-right: 6px; }
+        .loading-phase.done { color: var(--accent-green); }
+        .loading-phase.active { color: var(--accent-orange); font-weight: 600; }
+        .loading-phase.pending { color: var(--text-dim); opacity: 0.4; }
+
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-title">
+            <h1>HRRR Precipitation Verification</h1>
+            <span class="tag">Dashboard</span>
+            <button onclick="showTutorial()" style="background:transparent;border:1px solid var(--text-dim);color:var(--text-dim);padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:12px;">? Guide</button>
+        </div>
+    </div>
+
+    <!-- Tutorial modal -->
+    <div id="tutorialOverlay" class="tutorial-overlay" style="display:none;">
+        <div class="tutorial-box">
+            <button class="tutorial-close" onclick="closeTutorial()">✕</button>
+            <div id="tutorialContent"></div>
+            <div class="tutorial-dots" id="tutorialDots"></div>
+            <div class="tutorial-nav">
+                <button class="btn-skip" onclick="closeTutorial()">Skip</button>
+                <button class="btn-next" id="tutorialNextBtn" onclick="nextTutorialStep()">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls">
+        <div class="control-group">
+            <label>Event Date</label>
+            <input type="date" id="eventDate" value="2024-09-29">
+        </div>
+        <div class="control-group">
+            <label>Accumulation Window <span title="Total hours of precipitation to sum. A 24h window at 00Z covers midnight to midnight UTC." style="cursor:help;color:var(--accent-blue);">ⓘ</span></label>
+            <select id="accumHours">
+                <option value="6">6h</option>
+                <option value="12">12h</option>
+                <option value="18">18h</option>
+                <option value="24" selected>24h</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Forecast Strategy <span title="Day-Ahead 12Z: previous day's noon run, fhr 13-36, mean lead 24.5h (hardest test). Single Init: same-day 00Z, fhr 1-24, mean lead 12.5h. Rolling 1h: latest init each hour, fhr 1 only, mean lead 1h (best-case)." style="cursor:help;color:var(--accent-blue);">ⓘ</span></label>
+            <select id="strategy">
+                <option value="day_ahead_12z" selected>Day-Ahead 12Z</option>
+                <option value="single_init">Single Init 00Z</option>
+                <option value="rolling_1h">Rolling 1h</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Statistics Area <span title="Metrics (bias, MAE, RMSE, CSI, FSS) are computed only within this domain. Map overlays always cover the full 600km eastern US extent regardless of this setting." style="cursor:help;color:var(--accent-blue);">ⓘ</span></label>
+            <select id="domainKm" onchange="onDomainChange()">
+                <option value="50">50km (tight NYC)</option>
+                <option value="100" selected>100km (metro area)</option>
+                <option value="150">150km (regional)</option>
+                <option value="200">200km (wide)</option>
+                <option value="300">300km (tri-state+)</option>
+                <option value="custom">Custom bounds...</option>
+            </select>
+        </div>
+        <div id="customBboxPanel" style="display:none; align-items:center; gap:6px; flex-wrap:wrap;">
+            <input type="number" id="bboxSouth" placeholder="S lat" step="0.01" style="width:70px;padding:3px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-tertiary);color:var(--text-primary);font-size:11px;">
+            <input type="number" id="bboxNorth" placeholder="N lat" step="0.01" style="width:70px;padding:3px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-tertiary);color:var(--text-primary);font-size:11px;">
+            <input type="number" id="bboxWest" placeholder="W lon" step="0.01" style="width:70px;padding:3px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-tertiary);color:var(--text-primary);font-size:11px;">
+            <input type="number" id="bboxEast" placeholder="E lon" step="0.01" style="width:70px;padding:3px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-tertiary);color:var(--text-primary);font-size:11px;">
+            <button onclick="startDrawBbox()" style="padding:3px 8px;border-radius:4px;border:1px solid var(--accent-blue);background:transparent;color:var(--accent-blue);cursor:pointer;font-size:11px;" title="Click then drag a rectangle on the map">✎ Draw</button>
+        </div>
+        <div class="time-display" id="timeDisplay">
+            <span>UTC:</span> 2024-09-29 00:00 → 2024-09-30 00:00 &nbsp;|&nbsp;
+            <span>ET:</span> 2024-09-28 08:00 PM → 2024-09-29 08:00 PM
+        </div>
+        <button class="btn-run" id="btnRun" onclick="runAnalysis()">Analyze</button>
+        <div class="status-text" id="statusText">Ready</div>
+    </div>
+
+    <!-- MAIN LAYOUT -->
+    <div class="main">
+
+        <!-- SIDEBAR: Metrics -->
+        <div class="sidebar" id="sidebar">
+            <div class="recent-panel" id="recentPanel" style="display:none;">
+                <h4>Recent Analyses</h4>
+                <div id="recentList"></div>
+            </div>
+            <div id="metricsPanel">
+                <div class="empty-state">
+                    <div class="icon">📊</div>
+                    <p>Select an event date and click <strong>Analyze</strong> to run the verification pipeline.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENT: Map + Figures -->
+        <div class="content">
+            <!-- Map controls row -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: var(--gauge-color)"></div>
+                        ASOS/AWOS Gauges
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: var(--uhmt-color)"></div>
+                        NY-uHMT Gauges
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="border: 2px dashed var(--hrrr-color); background: none;"></div>
+                        Analysis Domain
+                    </div>
+                </div>
+
+                <div class="map-view-btns">
+                    <span style="font-size: 11px; color: var(--text-dim); margin-right: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">View:</span>
+                    <button class="view-btn active" onclick="snapMapView('nyc', this)">NYC (~49×47 km)</button>
+                    <button class="view-btn" onclick="snapMapView('100km', this)">100km</button>
+                    <button class="view-btn" onclick="snapMapView('300km', this)">300km</button>
+                    <button class="view-btn" onclick="snapMapView('full', this)">Full data (600km)</button>
+                </div>
+            </div>
+
+            <!-- Layer toggle controls (one active at a time) -->
+            <div class="layer-controls" id="layerControls" style="display: none;">
+                <span class="layer-label">Layers:</span>
+                <button class="layer-btn" id="btnLayerHrrr" onclick="toggleOverlay('hrrr', this)" data-active="false">
+                    <span class="layer-check">☐</span> HRRR
+                </button>
+                <button class="layer-btn" id="btnLayerAorc" onclick="toggleOverlay('aorc', this)" data-active="false">
+                    <span class="layer-check">☐</span> AORC
+                </button>
+                <button class="layer-btn" id="btnLayerMrms" onclick="toggleOverlay('mrms', this)" data-active="false" style="display:none;">
+                    <span class="layer-check">☐</span> MRMS
+                </button>
+                <span class="layer-separator">|</span>
+                <button class="layer-btn" id="btnLayerDiff_ha" onclick="toggleOverlay('diff_ha', this)" data-active="false">
+                    <span class="layer-check">☐</span> HRRR−AORC
+                </button>
+                <button class="layer-btn" id="btnLayerDiff_hm" onclick="toggleOverlay('diff_hm', this)" data-active="false" style="display:none;">
+                    <span class="layer-check">☐</span> HRRR−MRMS
+                </button>
+                <button class="layer-btn" id="btnLayerDiff_am" onclick="toggleOverlay('diff_am', this)" data-active="false" style="display:none;">
+                    <span class="layer-check">☐</span> AORC−MRMS
+                </button>
+                <span class="layer-separator">|</span>
+                <label class="opacity-control">
+                    <span style="font-size: 10px; color: var(--text-dim);">Opacity</span>
+                    <input type="range" id="overlayOpacity" min="10" max="100" value="80" 
+                           oninput="setOverlayOpacity(this.value)">
+                </label>
+            </div>
+
+            <div class="map-container">
+                <div id="map"></div>
+                <!-- Dynamic colorbar overlay -->
+                <div class="map-colorbar" id="mapColorbar" style="display: none;">
+                    <div class="cbar-title" id="cbarTitle"></div>
+                    <div class="cbar-gradient" id="cbarGradient"></div>
+                    <div class="cbar-labels" id="cbarLabels"></div>
+                </div>
+            </div>
+
+            <!-- Hourly Time Slider -->
+            <div class="time-slider-wrap" id="timeSliderWrap" style="display: none;">
+                <div class="slider-header">
+                    <span class="slider-label">Hour: <strong id="sliderHourLabel">24 / 24</strong></span>
+                    <span class="slider-time" id="sliderTimeLabel"></span>
+                    <div class="slider-btns">
+                        <button onclick="stepSlider(-1)" title="Previous hour">◀</button>
+                        <button onclick="togglePlaySlider()" id="playBtn" title="Play/Pause">▶</button>
+                        <button onclick="stepSlider(1)" title="Next hour">▶</button>
+                    </div>
+                </div>
+                <input type="range" id="hourSlider" min="0" max="23" value="23"
+                       oninput="onSliderChange(this.value)" class="hour-slider">
+                <div class="slider-ticks" id="sliderTicks"></div>
+            </div>
+
+            <!-- Figures -->
+            <div id="figuresPanel">
+                <div class="empty-state">
+                    <div class="icon">🗺️</div>
+                    <p>Verification figures will appear here after analysis completes.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom/Pan Figure Viewer -->
+    <div class="overlay" id="overlay">
+        <div class="overlay-header">
+            <span class="overlay-title" id="overlayTitle"></span>
+            <div class="zoom-controls">
+                <button onclick="zoomViewer(0.3)" title="Zoom In">+</button>
+                <button onclick="zoomViewer(-0.3)" title="Zoom Out">−</button>
+                <button onclick="resetZoom()" title="Reset">↺</button>
+                <button onclick="closeZoomViewer()" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="overlay-img-wrap" id="overlayImgWrap">
+            <img id="overlayImg" src="" alt="Figure" draggable="false">
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // =================================================================
+        // STATE
+        // =================================================================
+        let currentData = null;
+        let gaugeMarkers = [];
+        let bboxRect = null;
+        
+        // Map overlay layers (HRRR, AORC, Diff as transparent image overlays)
+        let overlayLayers = {};  // { hrrr: L.imageOverlay, aorc: ..., diff: ... }
+        let overlayData = null;  // Raw overlay metadata from API
+
+        // =================================================================
+        // MAP VIEW SNAP
+        // =================================================================
+        // NYC tight: 40.48-40.92N, 74.26-73.70W
+        // 100km: ~0.45° lat/lon from center (40.71, -74.01)
+        // 300km: ~1.35° lat/lon from center
+        const MAP_VIEWS = {
+            nyc: { bounds: [[40.48, -74.26], [40.92, -73.70]], label: 'NYC Metro (~49×47 km)' },
+            '100km': { bounds: [[40.26, -74.46], [41.16, -73.56]], label: '100km Analysis Domain' },
+            '300km': { bounds: [[39.36, -75.51], [42.06, -72.51]], label: '300km Regional View' },
+            'full': { bounds: [[37.9, -77.5], [43.5, -70.2]], label: 'Full Data Extent (~600km)' },
+        };
+
+        function snapMapView(view, btnEl) {
+            // Update active button
+            document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+
+            const v = MAP_VIEWS[view];
+            if (v) {
+                map.fitBounds(v.bounds, { padding: [20, 20], animate: true, duration: 0.5 });
+            }
+        }
+
+        // =================================================================
+        // INITIALIZE MAP
+        // =================================================================
+        const map = L.map('map', {
+            center: [40.7128, -74.006],
+            zoom: 10,
+            zoomControl: true,
+        });
+
+        // Dark tile layer matching dashboard aesthetic
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 19,
+        }).addTo(map);
+
+        // =================================================================
+        // UPDATE TIME DISPLAY
+        // =================================================================
+        function updateTimeDisplay() {
+            const dateInput = document.getElementById('eventDate').value;
+            const hours = parseInt(document.getElementById('accumHours').value);
+
+            if (!dateInput) return;
+
+            const startUTC = new Date(dateInput + 'T00:00:00Z');
+            const endUTC = new Date(startUTC.getTime() + hours * 3600000);
+
+            // ET = UTC - 5 (EST) or UTC - 4 (EDT)
+            // Approximate: use -4 for Apr-Oct, -5 for Nov-Mar
+            const month = startUTC.getUTCMonth();
+            const etOffset = (month >= 3 && month <= 9) ? 4 : 5;
+
+            const startET = new Date(startUTC.getTime() - etOffset * 3600000);
+            const endET = new Date(endUTC.getTime() - etOffset * 3600000);
+
+            const fmtUTC = (d) => d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+            const fmtET = (d) => {
+                const h = d.getUTCHours();
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 || 12;
+                return `${d.toISOString().slice(0, 10)} ${h12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${ampm} ET`;
+            };
+
+            document.getElementById('timeDisplay').innerHTML =
+                `<span>UTC:</span> ${fmtUTC(startUTC)} → ${fmtUTC(endUTC)} &nbsp;|&nbsp; <span>ET:</span> ${fmtET(startET)} → ${fmtET(endET)}`;
+        }
+
+        document.getElementById('eventDate').addEventListener('change', updateTimeDisplay);
+        document.getElementById('accumHours').addEventListener('change', updateTimeDisplay);
+        updateTimeDisplay();
+
+        // =================================================================
+        // RUN ANALYSIS
+        // =================================================================
+        async function runAnalysis() {
+            const date = document.getElementById('eventDate').value;
+            const accumHours = parseInt(document.getElementById('accumHours').value);
+            const strategy = document.getElementById('strategy').value;
+            const domainVal = document.getElementById('domainKm').value;
+            const isCustom = domainVal === 'custom';
+            const domainKm = isCustom ? 100 : parseInt(domainVal);
+
+            let customBbox = null;
+            if (isCustom) {
+                const s = parseFloat(document.getElementById('bboxSouth').value);
+                const n = parseFloat(document.getElementById('bboxNorth').value);
+                const w = parseFloat(document.getElementById('bboxWest').value);
+                const e = parseFloat(document.getElementById('bboxEast').value);
+                if (isNaN(s) || isNaN(n) || isNaN(w) || isNaN(e)) {
+                    alert('Enter all four coordinates (S/N lat, W/E lon) or draw a box on the map.');
+                    return;
+                }
+                customBbox = { south: s, north: n, west: w, east: e };
+            }
+            const reference = "aorc";  // Both AORC and MRMS are always downloaded; AORC is primary for metrics
+            const contextKm = 600;  // Auto: overlays always cover eastern US context
+
+            if (!date) { alert('Select a date first.'); return; }
+
+            const btn = document.getElementById('btnRun');
+            const status = document.getElementById('statusText');
+
+            btn.disabled = true;
+            status.textContent = 'Starting pipeline...';
+            status.className = 'status-text running';
+
+            // Animated loading phases
+            const phases = ['AORC', 'MRMS', 'HRRR', 'Regrid', 'Metrics', 'Figures'];
+            let phaseIdx = 0;
+            const phaseTimer = setInterval(() => {
+                if (phaseIdx >= phases.length) { clearInterval(phaseTimer); return; }
+                let html = phases.map((p, i) => {
+                    let cls = i < phaseIdx ? 'done' : i === phaseIdx ? 'active' : 'pending';
+                    let icon = i < phaseIdx ? '✓' : i === phaseIdx ? '⟳' : '○';
+                    return `<span class="loading-phase ${cls}">${icon} ${p}</span>`;
+                }).join('');
+                status.innerHTML = html;
+                phaseIdx++;
+            }, 8000);  // Advance every ~8s (typical phase duration)
+
+            // Remove live HRRR overlay if present
+            if (window.liveHRRROverlay && map.hasLayer(window.liveHRRROverlay)) {
+                map.removeLayer(window.liveHRRROverlay);
+                window.liveHRRROverlay = null;
+            }
+
+            try {
+                const resp = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date, accum_hours: accumHours, strategy, domain_km: domainKm, reference, context_km: contextKm, custom_bbox: customBbox }),
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Analysis failed');
+                }
+
+                currentData = await resp.json();
+                renderMetrics(currentData);
+                renderFigures(currentData);
+                renderGauges(currentData);
+                renderBBox(currentData);
+                initSlider(currentData);
+                renderOverlays(currentData);
+
+                clearInterval(phaseTimer);
+                status.textContent = `Complete — ${currentData.event.label}`;
+                status.className = 'status-text done';
+
+                // Add to recent analyses
+                addRecentAnalysis(date, accumHours, strategy, domainKm, currentData.event.label);
+
+            } catch (err) {
+                clearInterval(phaseTimer);
+                const msg = err.message || 'Unknown error';
+                status.textContent = `Error: ${msg}`;
+                status.className = 'status-text error';
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // =================================================================
+        // RENDER METRICS SIDEBAR
+        // =================================================================
+        function renderMetrics(data) {
+            const m = data.metrics;
+            const cont = m.continuous || {};
+            const gs = data.grid_summary || {};
+            const gauges = data.gauges || [];
+            const cat = m.categorical_multi || {};
+            const ev = data.event;
+
+            // Color-code metrics
+            function biasClass(v) {
+                if (v === null || v === undefined) return '';
+                const b = Math.abs(v - 1);
+                if (b < 0.15) return 'good';
+                if (b < 0.4) return 'warn';
+                return 'bad';
+            }
+            function corrClass(v) {
+                if (v === null || v === undefined) return '';
+                if (v > 0.6) return 'good';
+                if (v > 0.2) return 'warn';
+                return 'bad';
+            }
+
+            const refLabel = 'AORC (primary)' + (ev.mrms_available ? ' + MRMS' : '');
+
+            let html = `
+                <div class="metric-section">
+                    <h3>Event</h3>
+                    <div class="metric-row">
+                        <span class="metric-label">Date</span>
+                        <span class="metric-value">${ev.date}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Window</span>
+                        <span class="metric-value">${ev.accum_hours}h</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Strategy</span>
+                        <span class="metric-value">${ev.strategy}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">UTC</span>
+                        <span class="metric-value" style="font-size:11px">${ev.start_utc.slice(0,16)} → ${ev.end_utc.slice(0,16)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Eastern</span>
+                        <span class="metric-value" style="font-size:11px">${ev.start_et} → ${ev.end_et}</span>
+                    </div>
+                </div>
+
+                <div style="background: rgba(46,117,182,0.15); border: 1px solid rgba(46,117,182,0.3); border-radius: 8px; padding: 8px 12px; margin: 8px 0 12px 0; text-align: center;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--hrrr-color);">
+                        All metrics computed over the ${data.domain.size_km}km domain
+                    </span>
+                    <br>
+                    <span style="font-size: 10px; color: var(--text-dim);">
+                        HRRR vs AORC · ${gs.n_cells} grid cells · centered on NYC
+                    </span>
+                </div>
+
+                <div class="metric-section">
+                    <h3>Continuous Metrics</h3>
+                    <div class="metric-big">
+                        <div class="value ${biasClass(cont.mult_bias)}">${fmt(cont.mult_bias, 3)}</div>
+                        <div class="label">Multiplicative Bias (1.0 = perfect)</div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Additive Bias</span>
+                        <span class="metric-value">${fmt(cont.add_bias, 2)} mm</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">MAE</span>
+                        <span class="metric-value">${fmt(cont.mae, 2)} mm</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">RMSE</span>
+                        <span class="metric-value">${fmt(cont.rmse, 2)} mm</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Correlation</span>
+                        <span class="metric-value ${corrClass(cont.correlation)}">${fmt(cont.correlation, 4)}</span>
+                    </div>
+                </div>
+
+                <div class="metric-section">
+                    <h3>Domain (${data.domain.size_km}km box)</h3>
+                    <div class="metric-row">
+                        <span class="metric-label">HRRR mean / max</span>
+                        <span class="metric-value">${gs.hrrr_mean_mm} / ${gs.hrrr_max_mm} mm</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">${refLabel} mean / max</span>
+                        <span class="metric-value">${gs.aorc_mean_mm} / ${gs.aorc_max_mm} mm</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Grid cells</span>
+                        <span class="metric-value">${gs.n_cells}</span>
+                    </div>
+                </div>
+            `;
+
+            // Detail toggle
+            html += `<div class="detail-toggle">
+                <button class="active" onclick="setDetailLevel('summary', this)">Summary</button>
+                <button onclick="setDetailLevel('full', this)">Full</button>
+            </div>`;
+
+            // Detailed sections (hidden in summary mode)
+            html += `<div id="detailSections">`;
+
+            // Categorical metrics table
+            if (cat && Object.keys(cat).length > 0) {
+                html += `<div class="metric-section"><h3>Categorical Metrics</h3>
+                    <table class="gauge-table">
+                        <tr><th>Thresh</th><th>POD</th><th>FAR</th><th>CSI</th><th>ETS</th></tr>`;
+                for (const [thresh, vals] of Object.entries(cat)) {
+                    html += `<tr>
+                        <td>${thresh}</td>
+                        <td>${fmt(vals.pod, 3)}</td>
+                        <td>${fmt(vals.far, 3)}</td>
+                        <td>${fmt(vals.csi, 3)}</td>
+                        <td>${fmt(vals.ets, 3)}</td>
+                    </tr>`;
+                }
+                html += `</table></div>`;
+            }
+
+            // FSS useful scale table
+            const fss = m.fss || {};
+            const fssScales = fss.useful_scale_km || {};
+            const fssData = fss.fss || {};
+            const inchMap = {'0.254': '0.01"', '2.54': '0.10"', '6.35': '0.25"', '12.7': '0.50"',
+                             '25.4': '1.00"', '50.8': '2.00"', '76.2': '3.00"', '101.6': '4.00"'};
+            if (Object.keys(fssScales).length > 0) {
+                html += `<div class="metric-section"><h3>FSS Useful Scale</h3>
+                    <table class="gauge-table">
+                        <tr><th>Threshold</th><th>Scale</th></tr>`;
+                for (const [thresh, km] of Object.entries(fssScales)) {
+                    const inch = inchMap[thresh] || '';
+                    // Check if FSS values are all NaN (trivial threshold)
+                    const fssVals = fssData[thresh] || [];
+                    const allNaN = fssVals.length > 0 && fssVals.every(v => v === null || isNaN(v));
+                    
+                    let scaleStr, cls;
+                    if (allNaN) {
+                        scaleStr = 'N/A';
+                        cls = '';
+                    } else if (km !== null) {
+                        scaleStr = `${km} km`;
+                        cls = km <= 30 ? 'good' : 'warn';
+                    } else {
+                        // Show actual domain size instead of "> domain"
+                        const domSize = currentData && currentData.domain ? currentData.domain.size_km : 0;
+                        scaleStr = domSize > 0 ? `> ${domSize} km` : '> analysis area';
+                        cls = 'bad';
+                    }
+                    html += `<tr>
+                        <td>${thresh}mm ${inch}</td>
+                        <td><span class="metric-value ${cls}">${scaleStr}</span></td>
+                    </tr>`;
+                }
+                html += `</table></div>`;
+            }
+
+            // Gauge table
+            if (gauges.length > 0) {
+                const asosN = gauges.filter(g => g.network !== 'NY-uHMT').length;
+                const uhmtN = gauges.filter(g => g.network === 'NY-uHMT').length;
+                html += `<div class="metric-section"><h3>Gauge Stations <span id="gaugeCount">${gauges.length} stations (${asosN} ASOS/AWOS + ${uhmtN} NY-uHMT)</span></h3>
+                    <table class="gauge-table">
+                        <tr><th>Station</th><th>Net</th><th>Obs</th><th>HRRR</th><th>AORC</th></tr>`;
+                for (const g of gauges.sort((a, b) => b.observed_mm - a.observed_mm)) {
+                    const netColor = g.network === 'NY-uHMT' ? '#a78bfa' : '#fb923c';
+                    const netLabel = g.network === 'NY-uHMT' ? 'uHMT' : 'ASOS/AWOS';
+                    html += `<tr>
+                        <td>${g.station}</td>
+                        <td style="color:${netColor};font-weight:600;font-size:10px">${netLabel}</td>
+                        <td>${g.observed_mm}</td>
+                        <td>${g.hrrr_mm !== null ? g.hrrr_mm : '—'}</td>
+                        <td>${g.aorc_mm !== null ? g.aorc_mm : '—'}</td>
+                    </tr>`;
+                }
+                html += `</table></div>`;
+            }
+
+            html += `</div>`; // close detailSections
+
+            document.getElementById('metricsPanel').innerHTML = html;
+            
+            // Default to summary mode (hide detailed sections)
+            const ds = document.getElementById('detailSections');
+            if (ds) ds.style.display = 'none';
+        }
+
+        function fmt(val, decimals) {
+            if (val === null || val === undefined) return '—';
+            return Number(val).toFixed(decimals);
+        }
+
+        // =================================================================
+        // RENDER FIGURES
+        // =================================================================
+        function renderFigures(data) {
+            const figs = data.figures || {};
+            const order = [
+                ['maps_panel', 'Precipitation Maps (HRRR / AORC / Difference)'],
+                ['stats_panel', 'Statistics (PDF / CDF / Gauge Scatter)'],
+                ['timeseries', 'Hourly Time Series (HRRR / AORC / Gauges)'],
+                ['fss', 'Fractions Skill Score vs Spatial Scale'],
+                ['metrics_text', 'Verification Summary'],
+                ['hrrr_map', 'HRRR Precipitation'],
+                ['aorc_map', 'AORC Precipitation'],
+                ['diff_map', 'Difference (HRRR − AORC)'],
+                ['pdf', 'PDF Comparison'],
+                ['cdf', 'CDF Comparison'],
+                ['gauge_scatter', 'Gauge Scatter'],
+                ['gauge_bias', 'Gauge Bias'],
+            ];
+
+            let html = '<div class="figure-grid">';
+            for (const [key, title] of order) {
+                if (figs[key]) {
+                    // Make the 3-panel figures span full width
+                    const wide = ['maps_panel', 'stats_panel', 'metrics_text', 'fss', 'timeseries'].includes(key);
+                    html += `
+                        <div class="figure-card ${wide ? 'figure-wide' : ''}">
+                            <h4>${title}</h4>
+                            <img src="${figs[key]}" alt="${title}"
+                                 onclick="openZoomViewer('${figs[key]}', '${title}')" loading="lazy">
+                        </div>`;
+                }
+            }
+            html += '</div>';
+
+            document.getElementById('figuresPanel').innerHTML = html;
+        }
+
+        // =================================================================
+        // ZOOM/PAN FIGURE VIEWER
+        // =================================================================
+        let viewerScale = 1;
+        let viewerPosX = 0;
+        let viewerPosY = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        function openZoomViewer(src, title) {
+            const overlay = document.getElementById('overlay');
+            const img = document.getElementById('overlayImg');
+            const titleEl = document.getElementById('overlayTitle');
+            
+            img.src = src;
+            titleEl.textContent = title;
+            overlay.classList.add('active');
+            
+            // Reset zoom/pan
+            viewerScale = 1;
+            viewerPosX = 0;
+            viewerPosY = 0;
+            updateViewerTransform();
+        }
+
+        function closeZoomViewer() {
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        function updateViewerTransform() {
+            const img = document.getElementById('overlayImg');
+            img.style.transform = `translate(${viewerPosX}px, ${viewerPosY}px) scale(${viewerScale})`;
+        }
+
+        function zoomViewer(delta) {
+            viewerScale = Math.max(0.5, Math.min(5, viewerScale + delta));
+            updateViewerTransform();
+        }
+
+        function resetZoom() {
+            viewerScale = 1;
+            viewerPosX = 0;
+            viewerPosY = 0;
+            updateViewerTransform();
+        }
+
+        // Mouse wheel zoom
+        document.getElementById('overlayImgWrap').addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.2 : 0.2;
+            zoomViewer(delta);
+        });
+
+        // Drag to pan
+        document.getElementById('overlayImgWrap').addEventListener('mousedown', (e) => {
+            if (e.target.closest('.zoom-controls')) return;
+            isDragging = true;
+            dragStartX = e.clientX - viewerPosX;
+            dragStartY = e.clientY - viewerPosY;
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            viewerPosX = e.clientX - dragStartX;
+            viewerPosY = e.clientY - dragStartY;
+            updateViewerTransform();
+        });
+
+        document.addEventListener('mouseup', () => { isDragging = false; });
+
+        // Close viewer with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeZoomViewer();
+        });
+
+        // =================================================================
+        // RENDER GAUGE MARKERS ON MAP
+        // =================================================================
+        function renderGauges(data) {
+            // Clear old markers
+            gaugeMarkers.forEach(m => map.removeLayer(m));
+            gaugeMarkers = [];
+
+            const gauges = data.gauges || [];
+            if (gauges.length === 0) return;
+
+            for (const g of gauges) {
+                const mmVal = g.observed_mm.toFixed(1);
+                const isUhmt = (g.network === 'NY-uHMT');
+                const cssClass = isUhmt ? 'gauge-label-marker uhmt' : 'gauge-label-marker';
+                const networkLabel = isUhmt ? 'NY-uHMT' : 'ASOS/AWOS';
+                
+                // Create divIcon with mm value displayed
+                const icon = L.divIcon({
+                    className: '',
+                    html: `<div class="${cssClass}">
+                               <span class="stn-name">${g.station}</span>
+                               <span class="stn-val" data-station="${g.station}">${mmVal}</span>
+                           </div>`,
+                    iconSize: [50, 28],
+                    iconAnchor: [25, 14],
+                });
+
+                const marker = L.marker([g.lat, g.lon], { icon }).addTo(map);
+
+                const hBias = g.hrrr_mm !== null ? (g.hrrr_mm - g.observed_mm).toFixed(1) : '—';
+                const aBias = g.aorc_mm !== null ? (g.aorc_mm - g.observed_mm).toFixed(1) : '—';
+
+                marker.bindPopup(`
+                    <div style="font-family: 'DM Sans', sans-serif; font-size: 13px; min-width: 180px;">
+                        <strong style="font-size: 14px;">${g.station}</strong>
+                        <span style="font-size: 11px; color: ${isUhmt ? '#a78bfa' : '#fb923c'}; margin-left: 6px;">${networkLabel}</span><br>
+                        <hr style="margin: 4px 0; border-color: #ddd;">
+                        <b>Observed:</b> ${g.observed_mm} mm<br>
+                        <b>HRRR:</b> ${g.hrrr_mm !== null ? g.hrrr_mm : '—'} mm (bias: ${hBias})<br>
+                        <b>AORC:</b> ${g.aorc_mm !== null ? g.aorc_mm : '—'} mm (bias: ${aBias})<br>
+                    </div>
+                `);
+
+                marker._stationId = g.station;
+                gaugeMarkers.push(marker);
+            }
+
+            // Update gauge count in sidebar
+            const asosCount = gauges.filter(g => g.network !== 'NY-uHMT').length;
+            const uhmtCount = gauges.filter(g => g.network === 'NY-uHMT').length;
+            const countEl = document.getElementById('gaugeCount');
+            if (countEl) countEl.textContent = `${gauges.length} stations (${asosCount} ASOS/AWOS + ${uhmtCount} NY-uHMT)`;
+
+            // Snap to the active view button
+            const activeBtn = document.querySelector('.view-btn.active');
+            if (activeBtn) activeBtn.click();
+        }
+
+        // =================================================================
+        // HOURLY TIME SLIDER
+        // =================================================================
+        let hourlyData = null;
+        let sliderPlaying = false;
+        let playInterval = null;
+
+        function initSlider(data) {
+            hourlyData = data.hourly;
+            if (!hourlyData || !hourlyData.hours || hourlyData.hours.length === 0) return;
+
+            const n = hourlyData.hours.length;
+            const slider = document.getElementById('hourSlider');
+            slider.max = n - 1;
+            slider.value = n - 1;
+
+            // Build tick marks
+            const ticksDiv = document.getElementById('sliderTicks');
+            let ticksHtml = '';
+            for (let i = 0; i < n; i += 3) {
+                ticksHtml += `<span>${i}</span>`;
+            }
+            ticksHtml += `<span>${n}</span>`;
+            ticksDiv.innerHTML = ticksHtml;
+
+            document.getElementById('timeSliderWrap').style.display = 'block';
+            onSliderChange(n - 1);
+        }
+
+        function onSliderChange(val) {
+            const h = parseInt(val);
+            if (!hourlyData) return;
+
+            const n = hourlyData.hours.length;
+            const hourInfo = hourlyData.hours[h];
+
+            // Update labels
+            document.getElementById('sliderHourLabel').textContent = `${h + 1} / ${n}`;
+            document.getElementById('sliderTimeLabel').textContent =
+                `${hourInfo.utc.slice(0, 16)} UTC  |  ${hourInfo.et}`;
+
+            // Update gauge markers with cumulative values through this hour
+            updateMarkersForHour(h);
+        }
+
+        function updateMarkersForHour(h) {
+            if (!hourlyData || !hourlyData.stations) return;
+
+            // Update each marker's displayed mm value
+            for (const marker of gaugeMarkers) {
+                const sid = marker._stationId;
+                const sdata = hourlyData.stations[sid];
+                if (!sdata) continue;
+
+                const obsCumul = sdata.obs_cumul[h];
+                const hCumul = sdata.hrrr_cumul[h];
+                const aCumul = sdata.aorc_cumul[h];
+
+                // Update the divIcon label
+                const el = marker.getElement();
+                if (el) {
+                    const valSpan = el.querySelector('.stn-val');
+                    if (valSpan) valSpan.textContent = obsCumul.toFixed(1);
+                }
+
+                // Update popup
+                const bias_h = (hCumul - obsCumul).toFixed(1);
+                const bias_a = (aCumul - obsCumul).toFixed(1);
+                marker.setPopupContent(`
+                    <div style="font-family: 'DM Sans', sans-serif; font-size: 13px; min-width: 180px;">
+                        <strong style="font-size: 14px;">${sid}</strong>
+                        <span style="font-size: 11px; color: #888;"> (through hour ${h + 1})</span><br>
+                        <hr style="margin: 4px 0; border-color: #ddd;">
+                        <b>Observed:</b> ${obsCumul.toFixed(1)} mm<br>
+                        <b>HRRR:</b> ${hCumul.toFixed(1)} mm (bias: ${bias_h})<br>
+                        <b>AORC:</b> ${aCumul.toFixed(1)} mm (bias: ${bias_a})<br>
+                    </div>
+                `);
+            }
+        }
+
+        function stepSlider(delta) {
+            const slider = document.getElementById('hourSlider');
+            const newVal = Math.max(0, Math.min(parseInt(slider.max), parseInt(slider.value) + delta));
+            slider.value = newVal;
+            onSliderChange(newVal);
+        }
+
+        function togglePlaySlider() {
+            if (sliderPlaying) {
+                clearInterval(playInterval);
+                sliderPlaying = false;
+                document.getElementById('playBtn').textContent = '▶';
+            } else {
+                sliderPlaying = true;
+                document.getElementById('playBtn').textContent = '⏸';
+                playInterval = setInterval(() => {
+                    const slider = document.getElementById('hourSlider');
+                    const next = parseInt(slider.value) + 1;
+                    if (next > parseInt(slider.max)) {
+                        slider.value = 0;
+                    } else {
+                        slider.value = next;
+                    }
+                    onSliderChange(slider.value);
+                }, 800);
+            }
+        }
+
+        // =================================================================
+        // RENDER DOMAIN BOUNDING BOX ON MAP
+        // =================================================================
+        function renderBBox(data) {
+            if (bboxRect) map.removeLayer(bboxRect);
+
+            const bbox = data.domain.bbox;
+
+            // Domain bounding box (outer) — 100km analysis domain
+            bboxRect = L.rectangle(
+                [[bbox.south, bbox.west], [bbox.north, bbox.east]],
+                { color: '#4a9eff', weight: 2, fill: false, dashArray: '8 4' }
+            ).addTo(map).bindTooltip('Analysis Domain', { sticky: true });
+        }
+
+        // =================================================================
+        // MAP COLORBAR DEFINITIONS
+        // =================================================================
+        const COLORBARS = {
+            hrrr: {
+                title: 'HRRR Precip (mm)',
+                levels: [0, 0.5, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100],
+                colors: ['#FFFFFF','#C8E6C8','#7BC87B','#4CAF50','#2E7D32',
+                         '#FFEB3B','#FFC107','#FF9800','#F44336','#B71C1C','#9C27B0'],
+            },
+            aorc: {
+                title: 'AORC Precip (mm)',
+                levels: [0, 0.5, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100],
+                colors: ['#FFFFFF','#C8E6C8','#7BC87B','#4CAF50','#2E7D32',
+                         '#FFEB3B','#FFC107','#FF9800','#F44336','#B71C1C','#9C27B0'],
+            },
+            mrms: {
+                title: 'MRMS Precip (mm)',
+                levels: [0, 0.5, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100],
+                colors: ['#FFFFFF','#C8E6C8','#7BC87B','#4CAF50','#2E7D32',
+                         '#FFEB3B','#FFC107','#FF9800','#F44336','#B71C1C','#9C27B0'],
+            },
+            diff_ha: {
+                title: 'HRRR − AORC (mm)',
+                levels: [-30,-20,-15,-10,-5,-2,0,2,5,10,15,20,30],
+                colors: ['#08306B','#1D5996','#2171B5','#6BAED6','#BDD7E7','#E8EEF2',
+                         '#FDEAE3','#FCBBA1','#FB6A4A','#CB181D','#99000D','#67000D'],
+            },
+            diff_hm: {
+                title: 'HRRR − MRMS (mm)',
+                levels: [-30,-20,-15,-10,-5,-2,0,2,5,10,15,20,30],
+                colors: ['#08306B','#1D5996','#2171B5','#6BAED6','#BDD7E7','#E8EEF2',
+                         '#FDEAE3','#FCBBA1','#FB6A4A','#CB181D','#99000D','#67000D'],
+            },
+            diff_am: {
+                title: 'AORC − MRMS (mm)',
+                levels: [-30,-20,-15,-10,-5,-2,0,2,5,10,15,20,30],
+                colors: ['#08306B','#1D5996','#2171B5','#6BAED6','#BDD7E7','#E8EEF2',
+                         '#FDEAE3','#FCBBA1','#FB6A4A','#CB181D','#99000D','#67000D'],
+            },
+        };
+
+        function showColorbar(layerName) {
+            const cbar = document.getElementById('mapColorbar');
+            const def = COLORBARS[layerName];
+            if (!def) { cbar.style.display = 'none'; return; }
+
+            // Title
+            document.getElementById('cbarTitle').textContent = def.title;
+
+            // Gradient
+            const stops = def.colors.map((c, i) => {
+                const pct = (i / (def.colors.length - 1)) * 100;
+                return `${c} ${pct}%`;
+            }).join(', ');
+            document.getElementById('cbarGradient').style.background =
+                `linear-gradient(to right, ${stops})`;
+
+            // Labels — show a subset to avoid crowding
+            const labels = def.levels;
+            const labelsEl = document.getElementById('cbarLabels');
+            // Show every other label for precip, every 2nd for diff
+            const step = labels.length > 8 ? 2 : 1;
+            let html = '';
+            for (let i = 0; i < labels.length; i += step) {
+                html += `<span>${labels[i]}</span>`;
+            }
+            // Always include last
+            if ((labels.length - 1) % step !== 0) {
+                html += `<span>${labels[labels.length - 1]}</span>`;
+            }
+            labelsEl.innerHTML = html;
+
+            cbar.style.display = 'block';
+        }
+
+        function hideColorbar() {
+            document.getElementById('mapColorbar').style.display = 'none';
+        }
+
+        // =================================================================
+        // MAP OVERLAY MANAGEMENT (HRRR / AORC / DIFF layers)
+        // =================================================================
+
+        function renderOverlays(data) {
+            // Remove any existing overlay layers
+            for (const key of Object.keys(overlayLayers)) {
+                if (overlayLayers[key]) {
+                    map.removeLayer(overlayLayers[key]);
+                }
+            }
+            overlayLayers = {};
+
+            overlayData = data.overlays || {};
+
+            // Show/hide MRMS buttons based on availability
+            const mrmsAvail = data.event && data.event.mrms_available;
+            document.getElementById('btnLayerMrms').style.display = mrmsAvail ? '' : 'none';
+            document.getElementById('btnLayerDiff_hm').style.display = mrmsAvail ? '' : 'none';
+            document.getElementById('btnLayerDiff_am').style.display = mrmsAvail ? '' : 'none';
+
+            if (Object.keys(overlayData).length === 0) {
+                document.getElementById('layerControls').style.display = 'none';
+                hideColorbar();
+                return;
+            }
+
+            // Show the layer controls
+            document.getElementById('layerControls').style.display = 'flex';
+
+            // Create Leaflet ImageOverlay for each layer (but don't add to map yet)
+            const opacity = parseInt(document.getElementById('overlayOpacity').value) / 100;
+
+            for (const [key, meta] of Object.entries(overlayData)) {
+                const bounds = L.latLngBounds(
+                    [meta.bounds.south, meta.bounds.west],
+                    [meta.bounds.north, meta.bounds.east]
+                );
+                overlayLayers[key] = L.imageOverlay(meta.url, bounds, {
+                    opacity: opacity,
+                    interactive: false,
+                    zIndex: 200,
+                });
+            }
+
+            // Reset all toggle buttons to off
+            document.querySelectorAll('.layer-btn').forEach(btn => {
+                btn.dataset.active = 'false';
+            });
+            hideColorbar();
+        }
+
+        function toggleOverlay(layerName, btnEl) {
+            const layer = overlayLayers[layerName];
+            if (!layer) return;
+
+            const isActive = btnEl.dataset.active === 'true';
+
+            // Turn OFF all layers and uncheck all buttons
+            for (const [key, lyr] of Object.entries(overlayLayers)) {
+                if (map.hasLayer(lyr)) map.removeLayer(lyr);
+            }
+            document.querySelectorAll('.layer-btn').forEach(btn => {
+                btn.dataset.active = 'false';
+                const chk = btn.querySelector('.layer-check');
+                if (chk) chk.textContent = '☐';
+            });
+
+            if (isActive) {
+                // Was active — just turn everything off (already done above)
+                hideColorbar();
+            } else {
+                // Turn ON only this layer and check its box
+                layer.addTo(map);
+                btnEl.dataset.active = 'true';
+                const chk = btnEl.querySelector('.layer-check');
+                if (chk) chk.textContent = '☑';
+                showColorbar(layerName);
+            }
+        }
+
+        function getActiveLayers() {
+            const active = [];
+            document.querySelectorAll('.layer-btn').forEach(btn => {
+                if (btn.dataset.active === 'true') {
+                    const id = btn.id.replace('btnLayer', '').toLowerCase();
+                    active.push(id);
+                }
+            });
+            return active;
+        }
+
+        function setOverlayOpacity(val) {
+            const opacity = parseInt(val) / 100;
+            for (const layer of Object.values(overlayLayers)) {
+                if (map.hasLayer(layer)) {
+                    layer.setOpacity(opacity);
+                }
+            }
+        }
+
+        // =================================================================
+        // LOAD AVAILABLE DATES ON PAGE LOAD
+        // =================================================================
+        async function loadAvailableDates() {
+            try {
+                const resp = await fetch('/api/available-dates');
+                const data = await resp.json();
+                if (data.count > 0) {
+                    const status = document.getElementById('statusText');
+                    status.textContent = `Ready — ${data.count} AORC dates available`;
+                    // Set min/max on date picker
+                    const dateInput = document.getElementById('eventDate');
+                    dateInput.min = data.dates[0];
+                    dateInput.max = data.dates[data.dates.length - 1];
+                }
+            } catch (e) {
+                console.log('Could not load available dates:', e);
+            }
+        }
+
+        loadAvailableDates();
+
+        // =================================================================
+        // LIVE HRRR ON PAGE LOAD
+        // =================================================================
+        async function loadLiveHRRR() {
+            const status = document.getElementById('statusText');
+            try {
+                status.textContent = 'Loading latest HRRR forecast...';
+                const resp = await fetch('/api/live-hrrr');
+                const data = await resp.json();
+                
+                if (data.available) {
+                    // Display overlay on map
+                    const bounds = [[data.bounds[0], data.bounds[1]], 
+                                    [data.bounds[2], data.bounds[3]]];
+                    const liveOverlay = L.imageOverlay(data.overlay_url, bounds, {
+                        opacity: 0.7,
+                        className: 'live-hrrr-overlay',
+                    }).addTo(map);
+                    
+                    // Store reference for later removal when full analysis runs
+                    window.liveHRRROverlay = liveOverlay;
+                    
+                    status.textContent = `Live HRRR: ${data.init_time} | ` +
+                        `${data.n_hours}h accum | Mean ${data.mean_mm}mm, Max ${data.max_mm}mm`;
+                    status.className = 'status-text done';
+                } else {
+                    status.textContent = data.message || 'Ready — select a date and click Analyze';
+                }
+            } catch (e) {
+                console.log('Live HRRR not available:', e);
+                status.textContent = 'Ready — select a date and click Analyze';
+            }
+        }
+
+        loadLiveHRRR();
+
+        // ========== TUTORIAL ==========
+        const tutorialSteps = [
+            { title: 'Welcome', body: '<p><span class="step-num">1</span><strong>Pick a date</strong> — select an event date from the date picker in the controls bar.</p>' },
+            { title: 'Configure', body: '<p><span class="step-num">2</span><strong>Set parameters</strong> — choose the accumulation window (6-24h), forecast strategy (Day-Ahead 12Z is default), and statistics area (50-300km around NYC).</p>' },
+            { title: 'Analyze', body: '<p><span class="step-num">3</span><strong>Click Analyze</strong> — the pipeline downloads HRRR forecasts from AWS S3, AORC gridded analysis from NOAA FTP, MRMS radar QPE from the Iowa State archive, and ASOS/AWOS gauge observations from the Iowa Environmental Mesonet API. NY-uHMT urban gauges are fetched from the NOAA CREST server. First run for a date takes 2-4 minutes; cached reruns are instant.</p>' },
+            { title: 'Explore Layers', body: '<p><span class="step-num">4</span><strong>Toggle map layers</strong> — check HRRR, AORC, MRMS, or any difference layer to see precipitation overlays on the map. Click gauge markers for station-level details.</p>' },
+            { title: 'Review Metrics', body: '<p><span class="step-num">5</span><strong>Check the sidebar</strong> — the Summary view shows key metrics at a glance. Switch to Full view for categorical thresholds, FSS scales, and per-station gauge data.</p>' },
+            { title: 'Figures', body: '<p><span class="step-num">6</span><strong>Scroll down</strong> — below the map you\'ll find publication-quality figures: PDF/CDF comparisons, FSS curves, gauge bias bars, and cumulative time series. Click any figure to zoom.</p>' },
+        ];
+        let tutorialStep = 0;
+
+        function showTutorial() {
+            tutorialStep = 0;
+            renderTutorialStep();
+            document.getElementById('tutorialOverlay').style.display = 'flex';
+        }
+        function closeTutorial() {
+            document.getElementById('tutorialOverlay').style.display = 'none';
+        }
+        function renderTutorialStep() {
+            const s = tutorialSteps[tutorialStep];
+            document.getElementById('tutorialContent').innerHTML = `<h2>${s.title}</h2>${s.body}`;
+            let dots = '';
+            for (let i = 0; i < tutorialSteps.length; i++) {
+                dots += `<span class="${i === tutorialStep ? 'active' : ''}" onclick="goTutorialStep(${i})"></span>`;
+            }
+            document.getElementById('tutorialDots').innerHTML = dots;
+            document.getElementById('tutorialNextBtn').textContent = tutorialStep === tutorialSteps.length - 1 ? 'Done' : 'Next';
+        }
+        function nextTutorialStep() {
+            if (tutorialStep >= tutorialSteps.length - 1) { closeTutorial(); return; }
+            tutorialStep++;
+            renderTutorialStep();
+        }
+        function goTutorialStep(i) {
+            tutorialStep = i;
+            renderTutorialStep();
+        }
+
+        // ========== RECENT ANALYSES ==========
+        const recentAnalyses = [];
+
+        function addRecentAnalysis(date, hours, strategy, km, label) {
+            // Remove duplicate if exists
+            const idx = recentAnalyses.findIndex(r => r.date === date && r.hours === hours && r.strategy === strategy);
+            if (idx >= 0) recentAnalyses.splice(idx, 1);
+            recentAnalyses.unshift({ date, hours, strategy, km, label, time: new Date().toLocaleTimeString() });
+            if (recentAnalyses.length > 10) recentAnalyses.pop();
+            renderRecentPanel();
+        }
+        function renderRecentPanel() {
+            const panel = document.getElementById('recentPanel');
+            const list = document.getElementById('recentList');
+            if (recentAnalyses.length === 0) { panel.style.display = 'none'; return; }
+            panel.style.display = 'block';
+            list.innerHTML = recentAnalyses.map((r, i) => `
+                <div class="recent-item" onclick="rerunAnalysis(${i})">
+                    <span class="ri-date">${r.date}</span>
+                    <span class="ri-info">${r.hours}h · ${r.km}km · ${r.time}</span>
+                </div>
+            `).join('');
+        }
+        function rerunAnalysis(idx) {
+            const r = recentAnalyses[idx];
+            document.getElementById('eventDate').value = r.date;
+            document.getElementById('accumHours').value = r.hours;
+            document.getElementById('strategy').value = r.strategy;
+            document.getElementById('domainKm').value = r.km;
+            runAnalysis();
+        }
+
+        // ========== CUSTOM DOMAIN ==========
+        let drawRect = null;
+
+        function onDomainChange() {
+            const val = document.getElementById('domainKm').value;
+            document.getElementById('customBboxPanel').style.display = val === 'custom' ? 'flex' : 'none';
+            // Remove any drawn rectangle when switching away
+            if (val !== 'custom' && drawRect) {
+                map.removeLayer(drawRect);
+                drawRect = null;
+            }
+        }
+
+        function startDrawBbox() {
+            if (drawRect) { map.removeLayer(drawRect); drawRect = null; }
+            map.getContainer().style.cursor = 'crosshair';
+            let startLatLng = null;
+
+            function onMouseDown(e) {
+                startLatLng = e.latlng;
+                map.dragging.disable();
+                map.on('mousemove', onMouseMove);
+                map.on('mouseup', onMouseUp);
+            }
+            function onMouseMove(e) {
+                if (!startLatLng) return;
+                if (drawRect) map.removeLayer(drawRect);
+                drawRect = L.rectangle([startLatLng, e.latlng], { color: '#3498db', weight: 2, fillOpacity: 0.15, dashArray: '6' }).addTo(map);
+            }
+            function onMouseUp(e) {
+                map.dragging.enable();
+                map.off('mousedown', onMouseDown);
+                map.off('mousemove', onMouseMove);
+                map.off('mouseup', onMouseUp);
+                map.getContainer().style.cursor = '';
+                if (!startLatLng) return;
+                const bounds = L.latLngBounds(startLatLng, e.latlng);
+                document.getElementById('bboxSouth').value = bounds.getSouth().toFixed(2);
+                document.getElementById('bboxNorth').value = bounds.getNorth().toFixed(2);
+                document.getElementById('bboxWest').value = bounds.getWest().toFixed(2);
+                document.getElementById('bboxEast').value = bounds.getEast().toFixed(2);
+                if (drawRect) map.removeLayer(drawRect);
+                drawRect = L.rectangle(bounds, { color: '#3498db', weight: 2, fillOpacity: 0.1, dashArray: '6' }).addTo(map);
+            }
+            map.once('mousedown', onMouseDown);
+        }
+
+        // ========== DETAIL TOGGLE ==========
+        function setDetailLevel(level, btnEl) {
+            const ds = document.getElementById('detailSections');
+            if (!ds) return;
+            ds.style.display = level === 'full' ? 'block' : 'none';
+            document.querySelectorAll('.detail-toggle button').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+        }
+    </script>
+</body>
+</html>
