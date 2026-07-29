@@ -1,0 +1,35 @@
+# Cache and generated data
+cache/
+data/
+*.npy
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Regridding weight files
+regrid_weights_*.nc
+bilinear_*.nc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
