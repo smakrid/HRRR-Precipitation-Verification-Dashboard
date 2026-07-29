@@ -38,7 +38,7 @@ Run these commands in **Anaconda Prompt** (Windows) or **Terminal** (Mac/Linux):
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-username/hrrr-precip-dashboard.git
+git clone https://github.com/smakrid/HRRR-Precipitation-Verification-Dashboard
 cd hrrr-precip-dashboard
 
 # Create conda environment with all core dependencies
