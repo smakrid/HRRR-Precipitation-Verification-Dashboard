@@ -1,0 +1,47 @@
+# HRRR Precipitation Verification Dashboard
+# Install with: pip install -r requirements.txt
+# Or better: use conda (see README.md for full conda command)
+
+# === Core dependencies (required) ===
+
+# Web framework
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0
+
+# Data handling
+numpy>=1.24.0
+pandas>=2.0.0
+xarray>=2023.1.0
+scipy>=1.10.0
+netCDF4>=1.6.0
+
+# HRRR data access (AWS S3)
+s3fs>=2023.1.0
+
+# HTTP requests (gauges, MRMS downloads)
+requests>=2.28.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# === Recommended (significant performance / feature improvements) ===
+
+# Faster regridding (10-20x speedup over scipy fallback)
+# Install via conda: conda install -c conda-forge xesmf esmpy
+# xesmf
+# esmpy
+
+# MRMS GRIB2 file reading
+# Install via conda: conda install -c conda-forge cfgrib eccodes
+# Or pip: pip install cfgrib (requires eccodes C library)
+# cfgrib
+
+# Geographic land mask (prevents coloring over ocean)
+# Install via conda: conda install -c conda-forge cartopy shapely
+# cartopy
+# shapely
+
+# Proper EDT/EST timezone handling (included in Python 3.9+)
+# For Python 3.8: pip install backports.zoneinfo
+# backports.zoneinfo; python_version < "3.9"
