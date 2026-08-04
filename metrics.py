@@ -13,9 +13,6 @@ Metric categories:
   4. GAUGE-SPECIFIC metrics (point-based comparison at station locations)
   5. SPATIAL metrics (per-grid-cell statistics for map overlays)
 
-Future: Fractions Skill Score (FSS) and ML-based bias correction model
-will be added in later phases.
-=============================================================================
 """
 
 import numpy as np
