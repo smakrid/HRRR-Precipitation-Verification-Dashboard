@@ -2,7 +2,7 @@
 
 An interactive tool for evaluating how well NOAA's HRRR model predicts rainfall over the New York City metro area. Pick a storm date, and the dashboard pulls forecast data from AWS, observed analyses from NOAA, and rain gauge measurements from airport and urban networks, then shows you exactly where the model got it right, where it missed, and by how much.
 
-Built for the CESSRST-II research group at the City College of New York as part of ongoing work connecting weather pattern classification with operational forecast performance.
+Built for the CESSRST-II research group at the City College of New York as part of ongoing work aimed at improving operational forecast performance.
 
 ---
 
